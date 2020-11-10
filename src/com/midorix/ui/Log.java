@@ -110,6 +110,7 @@ public class Log {
     }
 
     static void TestLog() {
+        //ICS DEBUG
         Print(t.SCS, "Task is successfully completed!");
         Print(t.DBG, "Debug info here: 001001011101011011");
         Print(t.INF, "This is a info message");
