@@ -1,28 +1,28 @@
 package com.midorix;
 
-import org.apache.http.client.ClientProtocolException;
+import org.apache.http.StatusLine;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.conn.scheme.SchemeRegistry;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.util.EntityUtils;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
-import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 
 public class Main {
 
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
+
+        //sudo /usr/sbin/pppd call hmavpn debug logfd 0 nodetach
+        //ppp0 38400 172.16.36.11 172.16.36.1 hmavpn
+
+
 /*
 
 -----------------------------------------------------------
@@ -41,7 +41,7 @@ public class Main {
 
 -----------------------------------------------------------
 
-            $ cat /etc/ppp/chap-secrets.pacsave
+            $ cat /etc/ppp/chap-secrets
         vpnbook        hmavpn        6b7wEa7        *
 
 -----------------------------------------------------------
@@ -56,49 +56,41 @@ public class Main {
         NetworkInterface ni = NetworkInterface.getByName("ppp0");
         InetAddress source = ni.getInetAddresses().nextElement();
 
-        System.out.println(source);
-
-        SSLContext sslContext = SSLContext.getInstance("SSL");
-
-// set up a TrustManager that trusts everything
-        sslContext.init(null, new TrustManager[] { new X509TrustManager() {
-            public X509Certificate[] getAcceptedIssuers() {
-                System.out.println("getAcceptedIssuers =============");
-                return null;
-            }
-
-            public void checkClientTrusted(X509Certificate[] certs,
-                                           String authType) {
-                System.out.println("checkClientTrusted =============");
-            }
-
-            public void checkServerTrusted(X509Certificate[] certs,
-                                           String authType) {
-                System.out.println("checkServerTrusted =============");
-            }
-        } }, new SecureRandom());
-
-        SSLSocketFactory sf = new SSLSocketFactory(sslContext);
-        Scheme httpsScheme = new Scheme("https", 443, sf);
-        SchemeRegistry schemeRegistry = new SchemeRegistry();
-        schemeRegistry.register(httpsScheme);
+        //System.out.println(source);
 
 
         RequestConfig config = RequestConfig.custom()
                 //.setLocalAddress(InetAddress.getByAddress(new byte[]{(byte) 192, (byte) 168, 1, 80}))
+                .setCircularRedirectsAllowed(true)
                 .setLocalAddress(source)
-                .setConnectTimeout(7000)
+                .setConnectionRequestTimeout(1000)
+                .setConnectTimeout(2000)
+                .setSocketTimeout(2000)
+                .setExpectContinueEnabled(true)
                 .build();
-        HttpGet httpGet = new HttpGet("http://checkip.amazonaws.com/");
-        httpGet.setConfig(config);
-        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
-                String responseBody = EntityUtils.toString(response.getEntity());
-                System.out.println(responseBody);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        HttpGet httpGet = new HttpGet("http://checkip.amazonaws.com");
 
+
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        cm.setDefaultMaxPerRoute(5);
+
+        CloseableHttpClient httpclient = HttpClients.custom()
+                .disableAuthCaching()
+                .setDefaultRequestConfig(config)
+                .disableAutomaticRetries()
+                .disableConnectionState()
+                .disableContentCompression()
+                .disableRedirectHandling()
+                .setKeepAliveStrategy(DefaultConnectionKeepAliveStrategy.INSTANCE)
+                .setConnectionManager(cm)
+                .build();
+
+        System.out.println("...");
+
+        CloseableHttpResponse response = httpclient.execute(httpGet);
+        StatusLine sl = response.getStatusLine();
+        System.out.println(sl);
+        String responseBody = EntityUtils.toString(response.getEntity());
+        System.out.println(responseBody);
     }
 }
