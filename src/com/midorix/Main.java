@@ -20,7 +20,7 @@ public class Main {
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
 
         //sudo /usr/sbin/pppd call hmavpn debug logfd 0 nodetach
-        //ppp0 38400 172.16.36.11 172.16.36.1 hmavpn
+        //ppp0 xx 38400 172.16.36.11 172.16.36.1 hmavpn
 
 
 /*
@@ -53,6 +53,8 @@ public class Main {
 -----------------------------------------------------------
 
 */
+
+
 
         NetworkInterface ni = NetworkInterface.getByName("ppp0");
         InetAddress source = ni.getInetAddresses().nextElement();
