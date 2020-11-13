@@ -1,6 +1,5 @@
 package com.midorix.pipos;
 
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.StatusLine;
 import org.apache.http.client.config.RequestConfig;
@@ -24,13 +23,15 @@ public class Pipos {
 
     final private static File RT_TABLES = new File("/etc/iproute2/rt_tables");
 
-    final private static String PTY_OPTION = "%s %s --nolaunchpppd --loglevel 0 --timeout %d";
+    final private static String PTY_OPTION = "%s %s --nolaunchpppd --nohostroute --loglevel 0 --timeout %d";
     final private static String IFACE_RPFILTER = "/proc/sys/net/ipv4/conf/%s/rp_filter";
     final private static File IP_FORWARD = new File("/proc/sys/net/ipv4/ip_forward");
     final private static File IP_DYNADDR = new File("/proc/sys/net/ipv4/ip_dynaddr");
 
     final private static List<String> DEFAULT_OPTIONS = Arrays.asList("debug", "lock", "noauth", "persist", "nobsdcomp", "nodeflate", "nodetach");
 
+
+    final private static int BASE_FROM_NO = 200;
     final private static int BASE_TABLE_NO = 300;
 
 
@@ -51,6 +52,7 @@ public class Pipos {
     private String tableName;
     private int tableNo;
     private File rpFilterFile;
+    private int fromNo;
     private String server;
     private String username;
     private String password;
@@ -67,6 +69,7 @@ public class Pipos {
         this.tableName = String.format("pipos%d", this.no);
         this.tableNo = BASE_TABLE_NO + this.no;
         this.rpFilterFile = new File(String.format(IFACE_RPFILTER, this.ifname));
+        this.fromNo = BASE_FROM_NO + this.no;
 
         boolean tableContain = false;
         List<String> lines = FileUtils.readLines(RT_TABLES, StandardCharsets.UTF_8);
@@ -159,14 +162,35 @@ public class Pipos {
 
         Runtime.getRuntime().exec(String.format("ip route flush table %s", tableName));
         Runtime.getRuntime().exec(String.format("ip route add default via %s dev %s table %s", remoteAddr, ifname, tableName));
-
-
-        Runtime.getRuntime().exec(String.format("ip rule add fwmark 0x1 pri 100 lookup %s", tableName));
-        Runtime.getRuntime().exec(String.format("ip rule add from %s pri 200 table %s", localAddr, tableName));
-
+        Runtime.getRuntime().exec(String.format("ip rule add from %s pri %d table %s", localAddr, fromNo, tableName));
         Runtime.getRuntime().exec("ip route flush cache");
 
-        NetworkInterface ni = NetworkInterface.getByName(ifname);
+
+
+        //System.out.println(source);
+
+        //sudo
+        //sudo ip route del 172.16.36.1
+        System.out.println("remote " + remoteAddr);
+        System.out.println("local " + localAddr);
+
+
+
+    }
+
+    public void disconnect() throws IOException {
+        process.destroy();
+        process.destroyForcibly();
+
+        Runtime.getRuntime().exec(String.format("ip route del %s", remoteAddr));
+        Runtime.getRuntime().exec(String.format("ip rule del pref %d", fromNo));
+        Runtime.getRuntime().exec(String.format("ip route flush table %s", tableName));
+        Runtime.getRuntime().exec("ip route flush cache");
+    }
+
+    public void check() throws IOException {
+
+        NetworkInterface ni = NetworkInterface.getByName(this.ifname);
         InetAddress source = ni.getInetAddresses().nextElement();
 
         //System.out.println(source);
@@ -205,18 +229,19 @@ public class Pipos {
         System.out.println(sl);
         String responseBody = EntityUtils.toString(response.getEntity());
         System.out.println(responseBody);
-
-
-        process.destroy();
-        process.destroyForcibly();
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
-        Pipos p = new Pipos(0);
-        p.setServer("fr8.vpnbook.com");
-        p.setCredentials("vpnbook", "6b7wEa7", AuthType.MPPE_128);
 
-        p.connect();
+    public static void main(String[] args) throws IOException, InterruptedException {
+        Pipos p0 = new Pipos(0);
+        p0.setServer("fr8.vpnbook.com");
+        p0.setCredentials("vpnbook", "6b7wEa7", AuthType.MPPE_128);
+
+        for (int i = 0; i <100 ; i++) {
+            p0.connect();
+            p0.check();
+            p0.disconnect();
+        }
 
     }
 
